@@ -38,8 +38,8 @@ int pointer_refresher;
 #include "RTC_SAMD51.h"
 #include "DateTime.h"
 // wifi credentials
-const char ssid[] = "Halimaw_EXT";
-const char password[] = "discipline";
+const char ssid[] = "XXXXXX";
+const char password[] = "XXXXXX";
 //wifi time variables
 millisDelay updateDelay; // the update delay object. used for ntp periodic update.
 unsigned int localPort = 2390;      // local port to listen for UDP packets
