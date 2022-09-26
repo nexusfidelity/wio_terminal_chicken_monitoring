@@ -14,17 +14,22 @@ TFT_eSPI tft;
 int lcd_status = 1;
 
 //ultrasonic variables
-int trigPin = 0;    // Trigger
-int echoPin = 1;    // Echo
+#define trig_water D0 //Button to Grove UART Port
+#define echo_water D1 //Button to Grove UART Port
 long duration, cm, inches, ultrasonic_val;
 float gauge, new_gauge, gauge_gap;
 
 //IO
-#define servo_direction D2 //Button to Grove UART Port
-#define servo_left D3 //Button to Grove UART Port
-#define servo_right D4 //Button to Grove UART Port
-#define servo_back D5 //Button to Grove UART Port
-#define fan_switch D6 //Button to Grove UART Port
+#define servo_left D2 
+#define servo_right D3
+//#define servo_back D4 //Button to Grove UART Port
+#define fan_switch D5 //Button to Grove UART Port
+
+//servo
+#include <Servo.h>
+Servo left_servo;
+Servo right_servo;
+Servo back_servo;
 
 //calibrations
 int pointer = 0;
@@ -95,11 +100,15 @@ void setup() {
   pinMode(WIO_5S_RIGHT, INPUT_PULLUP);
 
   //IO
-  pinMode(servo_direction, OUTPUT);
-  pinMode(servo_left, OUTPUT);
-  pinMode(servo_right, OUTPUT);
-  pinMode(servo_back, OUTPUT);
+  pinMode(trig_water, OUTPUT);
+  pinMode(echo_water, INPUT);
+
   pinMode(fan_switch, OUTPUT);
+  
+  //servo
+  left_servo.attach(servo_left);
+  right_servo.attach(servo_right);
+//  back_servo.attach(servo_back);
 
   //time
   // setup network before rtc check
@@ -127,10 +136,6 @@ void setup() {
   // start millisdelays timers as required, adjust to suit requirements
   updateDelay.start(6 * 60 * 60 * 1000); // update time via ntp every 12 hrs
 
-  //ultrasonic section
-  pinMode(trigPin, OUTPUT);
-  pinMode(echoPin, INPUT);
-
   //display LCD
   setup_LCD();
 }
@@ -151,9 +156,8 @@ void loop() {
     //    Serial.println("Humidity:");
     //    Serial.print(humidity);
   }
-
   fan(temperature);
-
+  
   //update time via wifi by 6 hours
   if (updateDelay.justFinished()) { // 6 hour loop
     // repeat timer
@@ -185,26 +189,21 @@ void loop() {
     }
   }
   else if (digitalRead(WIO_5S_LEFT) == LOW) {
-    //Serial.println("5 Way Left");
     pointer = pointer - 1;
     if (pointer < 0) {
-      pointer = 0;
-    }
-  }
-  else if (digitalRead(WIO_5S_RIGHT) == LOW) {
-    //Serial.println("5 Way Right");
-    pointer = pointer + 1;
-    if (pointer > 4) {
       pointer = 4;
     }
   }
+  else if (digitalRead(WIO_5S_RIGHT) == LOW) {
+    pointer = pointer + 1;
+    if (pointer > 4) {
+      pointer = 0;
+    }
+  }
   else if (digitalRead(WIO_5S_UP) == LOW) {
-    //Serial.println("5 Way Up");
     updownpointer = 1;
-
   }
   else if (digitalRead(WIO_5S_DOWN) == LOW) {
-    //Serial.println("5 Way Down");
     updownpointer = 2;
   }
   
@@ -212,11 +211,16 @@ void loop() {
   //servo functions
   check_calibration(pointer);
   drive_servo(pointer, updownpointer);
+  
+  delay(1000);
+  left_servo.write(90);
+  right_servo.write(90);
+  
   updownpointer = 0;
 
   //ultrasonic
-  ultrasonic_val = ultrasonic(trigPin, echoPin);
-  draw_water(ultrasonic_val);
+  ultrasonic();
+  
   draw_temp(temperature, humidity);
   draw_time();
 }
@@ -225,7 +229,7 @@ void fan(float temperature) {
   if (int(temperature) > 30) {
     digitalWrite(fan_switch, HIGH);
   }
-  else if (int(temperature) <= 30) {
+  else{
     digitalWrite(fan_switch, LOW);
   }
 }
@@ -234,7 +238,7 @@ void check_calibration(int pointer) {
   tft.setFreeFont(&FreeSansBold9pt7b);
   tft.setTextColor(TFT_BLACK, TFT_WHITE);
   if (pointer_refresher != pointer) {
-    tft.fillRect(165, 140, 150, 20, TFT_WHITE); //A 25x100 black rectangle starting from (110, 70)
+    tft.fillRect(165, 70, 150, 20, TFT_WHITE); //A 25x100 black rectangle starting from (110, 70)
   }
   pointer_refresher = pointer;
   if (pointer == 0) {
@@ -247,64 +251,36 @@ void check_calibration(int pointer) {
     tft.drawString("Blinds <Left>", 165, 70); //draw text string
   }
   else if (pointer == 3) {
-    tft.drawString("Blinds <Back>", 165, 70); //draw text string
+    tft.drawString("Blinds <Right>", 165, 70); //draw text string
   }
   else if (pointer == 4) {
-    tft.drawString("Blinds <Right>", 165, 70); //draw text string
+    tft.drawString("Blinds <Back>", 165, 70); //draw text string
   }
 }
 
-void drive_servo(int pointer, int updown) {
-  if ((pointer == 1) && (updown == 1)){
-    digitalWrite(servo_direction, LOW);
-    digitalWrite(servo_left, HIGH);
-    digitalWrite(servo_right, HIGH);
-    digitalWrite(servo_back, HIGH);
+void drive_servo(int pointer, int updownpointer) {
+if ((pointer == 1) && (updownpointer == 1)){
     }
-  else if ((pointer == 1) && (updown == 2)){
-    digitalWrite(servo_direction, HIGH);
-    digitalWrite(servo_left, HIGH);
-    digitalWrite(servo_right, HIGH);
-    digitalWrite(servo_back, HIGH);
+  if ((pointer == 1) && (updownpointer == 2)){
     }
-  else if ((pointer == 2) && (updown == 1)) {
-    //Serial.println("left clockwise");
-    digitalWrite(servo_direction, LOW);
-    digitalWrite(servo_left, HIGH);
+  if ((pointer == 2) && (updownpointer == 1)) {
+    left_servo.write(45);
   }
-  else if ((pointer == 2) && (updown == 2)) {
-    //Serial.println("left counter clockwise");
-    digitalWrite(servo_direction, HIGH);
-    digitalWrite(servo_left, HIGH);
+  if ((pointer == 2) && (updownpointer == 2)) {
+    left_servo.write(135);
   }
-
-  else if ((pointer == 3) && (updown == 1)) {
-    //Serial.println("left clockwise");
-    digitalWrite(servo_direction, LOW);
-    digitalWrite(servo_back, HIGH);
+  if ((pointer == 3) && (updownpointer == 1)) {
+    right_servo.write(45);
   }
-  else if ((pointer == 3) && (updown == 2)) {
-    //Serial.println("left counter clockwise");
-    digitalWrite(servo_direction, HIGH);
-    digitalWrite(servo_back, HIGH);
+  if ((pointer == 3) && (updownpointer == 2)) {
+    right_servo.write(135);
   }
-
-  else if ((pointer == 4) && (updown == 1)) {
-    //Serial.println("left clockwise");
-    digitalWrite(servo_direction, LOW);
-    digitalWrite(servo_right, HIGH);
+  if ((pointer == 4) && (updownpointer == 1)) {
+    
   }
-  else if ((pointer == 4) && (updown == 2)) {
-    //Serial.println("left counter clockwise");
-    digitalWrite(servo_direction, HIGH);
-    digitalWrite(servo_right, HIGH);
+  if ((pointer == 4) && (updownpointer == 2)) {
+    
   }
-  
-  delay(1000);
-  digitalWrite(servo_direction, LOW);
-  digitalWrite(servo_left, LOW);
-  digitalWrite(servo_right, LOW);
-  digitalWrite(servo_back, LOW);
 }
 
 void setup_LCD() {
@@ -454,44 +430,34 @@ void draw_time() {
 // wifi time functions
 //
 
-long ultrasonic(int trigPin, int echoPin) {
+void ultrasonic() {
   //ultraonic section
   // The sensor is triggered by a HIGH pulse of 10 or more microseconds.
   // Give a short LOW pulse beforehand to ensure a clean HIGH pulse:
-  digitalWrite(trigPin, LOW);
+  digitalWrite(trig_water, LOW);
   delayMicroseconds(5);
-  digitalWrite(trigPin, HIGH);
+  digitalWrite(trig_water, HIGH);
   delayMicroseconds(10);
-  digitalWrite(trigPin, LOW);
+  digitalWrite(trig_water, LOW);
 
   // Read the signal from the sensor: a HIGH pulse whose
   // duration is the time (in microseconds) from the sending
   // of the ping to the reception of its echo off of an object.
-  pinMode(echoPin, INPUT);
-  duration = pulseIn(echoPin, HIGH);
+  pinMode(echo_water, INPUT);
+  duration = pulseIn(echo_water, HIGH);
 
   // Convert the time into a distance
   //  inches = (duration / 2) / 74; // Divide by 74 or multiply by 0.0135
   cm = (duration / 2) / 29.1;   // Divide by 29.1 or multiply by 0.0343
-  return cm;
+  //return cm;
   //  Serial.print(inches);
   //  Serial.print("in, ");
   //Serial.print(cm);
   //Serial.print("cm");
+  //Serial.println();
 
-}
-
-void draw_temp(float temperature, float humidity) {
-  tft.setFreeFont(&FreeSansBold9pt7b);
-  tft.setTextColor(TFT_BLACK, TFT_WHITE);
-  tft.drawString(String(int(temperature)), 10, 30);
-  tft.drawString("C", 30, 30);
-  tft.drawString(String(int(humidity)), 10, 70);
-}
-
-void draw_water(long ultrasonic_val) {
   //LCD Drawing for water gauge
-  gauge = 100 * (1 - (float(ultrasonic_val) / 25));
+  gauge = 100 * (1 - (float(cm) / 25));
   //Serial.println(gauge);
   gauge_gap = 100 - gauge;
 
@@ -506,4 +472,13 @@ void draw_water(long ultrasonic_val) {
     tft.fillRect(0, 121, 160, 120, TFT_WHITE); //A 25x100 black rectangle starting from (110, 70)
   }
   new_gauge = gauge;
+  
+}
+
+void draw_temp(float temperature, float humidity) {
+  tft.setFreeFont(&FreeSansBold9pt7b);
+  tft.setTextColor(TFT_BLACK, TFT_WHITE);
+  tft.drawString(String(int(temperature)), 10, 30);
+  tft.drawString("C", 30, 30);
+  tft.drawString(String(int(humidity)), 10, 70);
 }
